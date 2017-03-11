@@ -20,11 +20,8 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DependencyResolutionRequiredException;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
@@ -58,7 +55,6 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
             updateClasspath();
             try {
                 setDefaultProperties();
-                getLog().info("=========== Fluxtion statemachine gen started  ==============");
                 ProcessBuilder processBuilder = new ProcessBuilder();
                 List<String> cmdList = new ArrayList<>();
                 cmdList.add(fluxtionExePath.getCanonicalPath());
@@ -85,15 +81,14 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
                 processBuilder.inheritIO();
                 getLog().info(processBuilder.command().stream().collect(Collectors.joining(" ")));
                 Process p = processBuilder.start();
-                p.waitFor();
-                getLog().info("=========== Fluxtion statemachine gen complete ==============");
+                if(p.waitFor()<0 && !ignoreErrors){
+                    throw new RuntimeException("unable to execute fluxtion-statemachine generator");
+                }
             } catch (IOException | InterruptedException e) {
                 getLog().error("error while invoking Fluxtion generator", e);
-                getLog().info("=========== Fluxtion statemachine gen ERROR =================");
             }
         } catch (MalformedURLException | DependencyResolutionRequiredException ex) {
                 getLog().error("error while building classpath", ex);
-                getLog().info("=========== Fluxtion statemachine gen ERROR =================");
         }
     }
     
@@ -114,21 +109,11 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
         }
     }
 
-    @Parameter(property = "project", readonly = true, required = true)
+    @Parameter(defaultValue = "${project}", required = true, readonly = true)
     private MavenProject project;
-
-    @Parameter(defaultValue = "${session}", readonly = true)
-    private MavenSession mavenSession;
-
-    @Component
-    private BuildPluginManager pluginManager;
-
     
     @Parameter(property = "fluxtionExe", required = true)
     private File fluxtionExePath;
-    
-    @Parameter(property = "plugin")
-    private PluginDescriptor descriptor;
 
     @Parameter(property = "statePackage")
     private String statePackage;
@@ -150,26 +135,23 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
 
     @Parameter(property = "logDebug", defaultValue = "false")
     public boolean logDebug;
-
+    
+    @Parameter(property = "ignoreErrors", defaultValue = "false")
+    /**
+     * continue build even if fluxtion tool returns an error
+     */
+    public boolean ignoreErrors;
+    
     private void updateClasspath() throws MojoExecutionException, MalformedURLException, DependencyResolutionRequiredException {
         StringBuilder sb = new StringBuilder();
         List<String> elements = project.getRuntimeClasspathElements();
-        Set<File> fileSet = new HashSet<>();
         for (String element : elements) {
             File elementFile = new File(element);
-            fileSet.add(elementFile);
-            getLog().debug("Adding element from plugin classpath:" + elementFile.getPath());
+            getLog().debug("Adding element from runtime to classpath:" + elementFile.getPath());
             sb.append(elementFile.getPath()).append(";");
-        }
-        Set<Artifact> artifacts = project.getArtifacts();
-        for (Artifact artifact : artifacts) {
-            File file = artifact.getFile();
-            if(!fileSet.contains(file)){
-                getLog().debug("Adding element from plugin classpath:" + file.getAbsolutePath());
-                sb.append(file.getAbsolutePath()).append(";");
-            }
         }
         classPath = sb.substring(0, sb.length() - 1);
         getLog().debug("classpath:" + classPath);
     }
+    
 }
