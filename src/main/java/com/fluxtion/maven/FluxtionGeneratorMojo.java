@@ -20,18 +20,11 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DependencyResolutionRequiredException;
-import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
-import org.apache.maven.plugin.BuildPluginManager;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.descriptor.PluginDescriptor;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -39,7 +32,8 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 
 /**
- * A mojo to wrap the invocation of the Fluxtion statemachine  generator executable.
+ * A mojo to wrap the invocation of the Fluxtion statemachine generator
+ * executable.
  *
  * @author Greg Higgins (greg.higgins@v12technology.com)
  */
@@ -58,11 +52,10 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
             updateClasspath();
             try {
                 setDefaultProperties();
-                getLog().info("=========== Fluxtion statemachine gen started  ==============");
                 ProcessBuilder processBuilder = new ProcessBuilder();
                 List<String> cmdList = new ArrayList<>();
                 cmdList.add(fluxtionExePath.getCanonicalPath());
-                if(logDebug){
+                if (logDebug) {
                     cmdList.add("--debug");
                 }
                 cmdList.add("-outDirectory");
@@ -76,7 +69,7 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
                 cmdList.add("-outClass");
                 cmdList.add(className);
                 cmdList.add("-statePackage");
-                cmdList.add(statePackage);             
+                cmdList.add(statePackage);
                 //must be at end
                 cmdList.add("-cp");
                 cmdList.add(classPath);
@@ -85,18 +78,17 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
                 processBuilder.inheritIO();
                 getLog().info(processBuilder.command().stream().collect(Collectors.joining(" ")));
                 Process p = processBuilder.start();
-                p.waitFor();
-                getLog().info("=========== Fluxtion statemachine gen complete ==============");
+                if (p.waitFor() < 0 && !ignoreErrors) {
+                    throw new RuntimeException("unable to execute fluxtion-statemachine generator");
+                }
             } catch (IOException | InterruptedException e) {
                 getLog().error("error while invoking Fluxtion generator", e);
-                getLog().info("=========== Fluxtion statemachine gen ERROR =================");
             }
         } catch (MalformedURLException | DependencyResolutionRequiredException ex) {
-                getLog().error("error while building classpath", ex);
-                getLog().info("=========== Fluxtion statemachine gen ERROR =================");
+            getLog().error("error while building classpath", ex);
         }
     }
-    
+
     private void setDefaultProperties() throws MojoExecutionException, IOException {
         try {
             if (outputDirectory == null || outputDirectory.length() < 1) {
@@ -105,7 +97,7 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
             if (resourcesOutputDirectory == null || resourcesOutputDirectory.length() < 1) {
                 resourcesOutputDirectory = project.getBasedir().getCanonicalPath() + "/target/generated-sources/fluxtion-meta";
             }
-            if(buildDirectory == null){
+            if (buildDirectory == null) {
                 buildDirectory = project.getBasedir().getCanonicalPath() + "/target/classes";
             }
         } catch (IOException iOException) {
@@ -114,62 +106,75 @@ public class FluxtionGeneratorMojo extends AbstractMojo {
         }
     }
 
-    @Parameter(property = "project", readonly = true, required = true)
+    @Parameter(defaultValue = "${project}", required = true, readonly = true)
     private MavenProject project;
 
-    @Parameter(defaultValue = "${session}", readonly = true)
-    private MavenSession mavenSession;
-
-    @Component
-    private BuildPluginManager pluginManager;
-
-    
+    /**
+     * The path to fluxtion executable
+     */
     @Parameter(property = "fluxtionExe", required = true)
     private File fluxtionExePath;
-    
-    @Parameter(property = "plugin")
-    private PluginDescriptor descriptor;
 
+    /**
+     * The package fluxtion will introspect to discover classes that are
+     * annotated with the @StateHandler annotation.
+     */
     @Parameter(property = "statePackage")
     private String statePackage;
 
+    /**
+     * The output package of the generated static event processor.
+     */
     @Parameter(property = "packageName", required = true)
     private String packageName;
 
+    /**
+     * The simple class name of the generated static event processor.
+     */
     @Parameter(property = "className", required = true)
     private String className;
 
+    /**
+     * The output directory for source artifacts generated by fluxtion.
+     */
     @Parameter(property = "outputDirectory")
     private String outputDirectory;
 
+    /**
+     * The output directory for build artifacts generated by fluxtion.
+     */
     @Parameter(property = "buildDirectory")
     private String buildDirectory;
 
+    /**
+     * The output directory for resources generated by fluxtion, such as a
+     * meta-data describing the static event processor
+     */
     @Parameter(property = "resourcesOutputDirectory")
     private String resourcesOutputDirectory;
 
+    /**
+     * Set log level to debug for fluxtion generation.
+     */
     @Parameter(property = "logDebug", defaultValue = "false")
     public boolean logDebug;
+
+    /**
+     * continue build even if fluxtion tool returns an error
+     */
+    @Parameter(property = "ignoreErrors", defaultValue = "false")
+    public boolean ignoreErrors;
 
     private void updateClasspath() throws MojoExecutionException, MalformedURLException, DependencyResolutionRequiredException {
         StringBuilder sb = new StringBuilder();
         List<String> elements = project.getRuntimeClasspathElements();
-        Set<File> fileSet = new HashSet<>();
         for (String element : elements) {
             File elementFile = new File(element);
-            fileSet.add(elementFile);
-            getLog().debug("Adding element from plugin classpath:" + elementFile.getPath());
+            getLog().debug("Adding element from runtime to classpath:" + elementFile.getPath());
             sb.append(elementFile.getPath()).append(";");
-        }
-        Set<Artifact> artifacts = project.getArtifacts();
-        for (Artifact artifact : artifacts) {
-            File file = artifact.getFile();
-            if(!fileSet.contains(file)){
-                getLog().debug("Adding element from plugin classpath:" + file.getAbsolutePath());
-                sb.append(file.getAbsolutePath()).append(";");
-            }
         }
         classPath = sb.substring(0, sb.length() - 1);
         getLog().debug("classpath:" + classPath);
     }
+
 }
