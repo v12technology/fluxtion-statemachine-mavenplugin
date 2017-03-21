@@ -27,6 +27,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses />.
     <packaging>maven-plugin</packaging>
     <name>fluxtion.statemachine :: maven plugin</name>
 
+    <description>Maven plugin to wrap invocation of the fluxtion statemachine generator within maven build cycle</description>
+    <url>https://github.com/v12technology/fluxtion-statemachine-mavenplugin</url>
+    
     <properties>
         <maven.version>3.2.5</maven.version>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -53,23 +56,44 @@ along with this program.  If not, see <http://www.gnu.org/licenses />.
     
     <scm>
         <connection>scm:git:https://github.com/v12technology/fluxtion-mavenplugin.git</connection>
-        <developerConnection>scm:git:https://github.com/v12technology/fluxtion-mavenplugin.git</developerConnection>
-        <url>https://github.com/v12technology/fluxtion-mavenplugin</url>
+        <developerConnection>scm:git:https://github.com/v12technology/fluxtion-statemachine-mavenplugin.gitt</developerConnection>
+        <url>https://github.com/v12technology/fluxtion-statemachine-mavenplugin.git</url>
     </scm>
     
     <distributionManagement>
-        <repository>
-            <id>myMavenRepo.write</id>
-            <url>${myMavenRepo.write.url}</url>
-        </repository>
         <snapshotRepository>
-            <id>myMavenRepo.write</id>
-            <url>${myMavenRepo.write.url}</url>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
         </snapshotRepository>
-    </distributionManagement>
+    </distributionManagement>  
     
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>1.6.7</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>1.5</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <!--Generates mojos as maven plugins-->
                 <groupId>org.apache.maven.plugins</groupId>
